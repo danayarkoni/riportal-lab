@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: riportal-config
+  labels:
+    {{- include "riportal.labels" . | nindent 4 }}
+data:
+  WELCOME_MSG: {{ .Values.env.welcomeMsg | quote }}
+  GIT_SHA:     {{ .Values.env.gitSha | quote }}

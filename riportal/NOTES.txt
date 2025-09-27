@@ -1,0 +1,17 @@
+1) If ingress is enabled, map the host in your OS hosts file:
+   <INGRESS_IP>  riportal.local
+
+2) AKS:
+   - Get External IP:
+     kubectl get svc -n ingress-nginx
+   - Add to hosts, then open: http://riportal.local/
+
+3) Minikube:
+   minikube addons enable ingress
+   minikube ip  # use that IP in hosts file
+
+4) Basic test:
+   curl -H "Host: riportal.local" http://<INGRESS_IP>/
+
+   
+http://riportal.4.156.229.209.nip.io/

@@ -1,0 +1,39 @@
+replicaCount: 2
+
+image:
+  repository: acraksdevopsdemodana.azurecr.io/flask-demo 
+  tag: "1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "riportal.local"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  path: "/"
+  pathType: Prefix
+  tls:
+    enabled: false
+
+env:
+  welcomeMsg: "Hello from Kubernetes via ConfigMap!"
+  gitSha: "dev"
+
+resources:
+  requests: { cpu: "200m", memory: "256Mi" }
+  limits:   { cpu: "500m", memory: "512Mi" }
+
+probes:
+  readiness: { path: "/", port: 8080, initialDelaySeconds: 5, periodSeconds: 5 }
+  liveness:  { path: "/", port: 8080, initialDelaySeconds: 10, periodSeconds: 10 }
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 50
