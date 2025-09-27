@@ -8,8 +8,6 @@ crash.*.log
 # Ignore Terraform provider binaries (downloaded plugins)
 terraform/.terraform/
 
-# Local overrides
-values.override.yaml
 
 # Python
 __pycache__/

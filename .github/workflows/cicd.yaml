@@ -1,11 +1,25 @@
-name: build-and-deploy
+name: riportal-app-cicd
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'riportal/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write    # <<< REQUIRED for OIDC
 
 env:
   IMAGE_NAME: flask-demo
+  AZ_RESOURCE_GROUP:     ${{ vars.AZ_RESOURCE_GROUP }}
+  AKS_CLUSTER_NAME:      ${{ vars.AKS_CLUSTER_NAME }}
+  AKS_NAMESPACE:         ${{ vars.AKS_NAMESPACE }}
+  ACR_NAME:              ${{ vars.ACR_NAME }}
+  ACR_LOGIN_SERVER:      ${{ vars.ACR_LOGIN_SERVER }}
 
 jobs:
   build:
@@ -20,17 +34,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Login to ACR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+      - name: Login to ACR (via Azure CLI)
+        run: az acr login --name "$ACR_NAME"
 
       - name: Build & push image
         run: |
-          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} app
-          docker push  ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker build -t $ACR_LOGIN_SERVER/$IMAGE_NAME:${{ github.sha }} ./app
+          docker push  $ACR_LOGIN_SERVER/$IMAGE_NAME:${{ github.sha }}
+          # also tag latest (optional)
+          docker tag  $ACR_LOGIN_SERVER/$IMAGE_NAME:${{ github.sha }} $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+          docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
 
   deploy:
     runs-on: ubuntu-latest
@@ -38,24 +51,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure login
-        uses: azure/login@v1
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set AKS context
-        uses: azure/aks-set-context@v3
+        uses: azure/aks-set-context@v4
         with:
-          resource-group: ${{ secrets.AKS_RG }}
-          cluster-name:   ${{ secrets.AKS_NAME }}
+          resource-group: ${{ env.AZ_RESOURCE_GROUP }}
+          cluster-name:  ${{ env.AKS_CLUSTER_NAME }}
+
+      - name: Ensure namespace exists
+        run: kubectl get ns "$AKS_NAMESPACE" || kubectl create ns "$AKS_NAMESPACE"
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
 
-      - name: Helm upgrade/install
+      - name: Helm upgrade/install riportal
+        working-directory: ./riportal
         run: |
-          helm upgrade --install riportal ./riportal \
-            --set image.repository=${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }} \
-            --set image.tag=${GITHUB_SHA} \
-            --set env.gitSha=${GITHUB_SHA}
-          kubectl rollout status deploy/riportal --timeout=300s
+          helm upgrade --install riportal . \
+            --namespace "$AKS_NAMESPACE" \
+            --set image.repository="$ACR_LOGIN_SERVER/$IMAGE_NAME" \
+            --set image.tag="${{ github.sha }}"
+
+      - name: Wait for rollout
+        run: kubectl -n "$AKS_NAMESPACE" rollout status deploy/riportal --timeout=300s

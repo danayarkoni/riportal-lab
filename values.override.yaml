@@ -1,0 +1,10 @@
+﻿ingress:
+  enabled: true
+  className: webapprouting.kubernetes.azure.com
+  host: riportal.4.156.229.209.nip.io
+  annotations: {}
+  path: /
+  pathType: Prefix
+
+service:
+  port: 8080
