@@ -21,7 +21,7 @@ ingress:
     enabled: false
 
 env:
-  welcomeMsg: "Hello from Kubernetes via ConfigMap!"
+  welcomeMsg: "Hello from Kubernetes via ConfigMap!!!!!!"
   gitSha: "dev"
 
 resources:
